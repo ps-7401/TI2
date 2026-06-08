@@ -1,214 +1,143 @@
 let chart;
-let timeData = [];
-let intensityData = [];
-let isRecording = false;
-let startTime;
-let intervalId;
+let drawCanvas;
+let drawCtx;
+let isDrawing = false;
+let rawPoints = [];
+let smoothedData = [];
+let maxTime = 60;
+let maxIntensity = 10;
 let currentSample = '';
 let currentAttribute = '';
 
-// Chart.jsの初期化
-function initChart() {
-    const ctx = document.getElementById('chart').getContext('2d');
-    chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: '強度',
-                data: [],
-                borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 3,
-                tension: 0.4,
-                fill: true,
-                pointRadius: 4,
-                pointBackgroundColor: '#667eea'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                title: {
-                    display: true,
-                    text: 'Time-Intensity曲線',
-                    font: { size: 18, weight: 'bold' }
-                },
-                legend: {
-                    display: true,
-                    position: 'top'
-                }
-            },
-            scales: {
-                x: {
-                    title: {
-                        display: true,
-                        text: '時間 (秒)',
-                        font: { size: 14, weight: 'bold' }
-                    }
-                },
-                y: {
-                    title: {
-                        display: true,
-                        text: '強度',
-                        font: { size: 14, weight: 'bold' }
-                    },
-                    min: 0,
-                    max: 10
-                }
-            }
-        }
-    });
-}
-
-// 要素の取得
-const startBtn = document.getElementById('startBtn');
-const stopBtn = document.getElementById('stopBtn');
-const resetBtn = document.getElementById('resetBtn');
-const intensitySlider = document.getElementById('intensitySlider');
-const intensityValue = document.getElementById('intensityValue');
-const sampleNameInput = document.getElementById('sampleName');
-const attributeInput = document.getElementById('attribute');
-const exportCsvBtn = document.getElementById('exportCsvBtn');
-const exportImageBtn = document.getElementById('exportImageBtn');
-
-// 評価開始
-startBtn.addEventListener('click', () => {
-    currentSample = sampleNameInput.value || 'サンプル名未設定';
-    currentAttribute = attributeInput.value || '属性未設定';
-    
-    isRecording = true;
-    startTime = Date.now();
-    timeData = [];
-    intensityData = [];
-    
-    startBtn.disabled = true;
-    stopBtn.disabled = false;
-    intensitySlider.disabled = false;
-    sampleNameInput.disabled = true;
-    attributeInput.disabled = true;
-    
-    chart.data.datasets[0].label = `${currentSample} - ${currentAttribute}`;
-    
-    intervalId = setInterval(() => {
-        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(1);
-        const intensity = parseFloat(intensitySlider.value);
-        
-        timeData.push(parseFloat(elapsedTime));
-        intensityData.push(intensity);
-        
-        updateChart();
-        updateDataTable();
-    }, 100);
-});
-
-// 評価終了
-stopBtn.addEventListener('click', () => {
-    isRecording = false;
-    clearInterval(intervalId);
-    
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
-    intensitySlider.disabled = true;
-});
-
-// リセット
-resetBtn.addEventListener('click', () => {
-    if (confirm('データをリセットしますか?')) {
-        isRecording = false;
-        clearInterval(intervalId);
-        
-        timeData = [];
-        intensityData = [];
-        
-        chart.data.labels = [];
-        chart.data.datasets[0].data = [];
-        chart.update();
-        
-        intensitySlider.value = 0;
-        intensityValue.textContent = '0.0';
-        
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        intensitySlider.disabled = true;
-        sampleNameInput.disabled = false;
-        attributeInput.disabled = false;
-        
-        document.getElementById('dataTable').innerHTML = '';
-    }
-});
-
-// スライダーの値表示
-intensitySlider.addEventListener('input', (e) => {
-    intensityValue.textContent = parseFloat(e.target.value).toFixed(1);
-});
-
-// グラフ更新
-function updateChart() {
-    chart.data.labels = timeData;
-    chart.data.datasets[0].data = intensityData;
-    chart.update('none'); // アニメーションなしで更新
-}
-
-// データテーブル更新
-function updateDataTable() {
-    const tableDiv = document.getElementById('dataTable');
-    
-    let html = '<table><thead><tr><th>時間(秒)</th><th>強度</th></tr></thead><tbody>';
-    
-    // 最新10件のみ表示
-    const displayData = timeData.slice(-10);
-    const displayIntensity = intensityData.slice(-10);
-    
-    for (let i = 0; i < displayData.length; i++) {
-        html += `<tr><td>${displayData[i].toFixed(1)}</td><td>${displayIntensity[i].toFixed(1)}</td></tr>`;
-    }
-    
-    html += '</tbody></table>';
-    tableDiv.innerHTML = html;
-}
-
-// CSV出力
-exportCsvBtn.addEventListener('click', () => {
-    if (timeData.length === 0) {
-        alert('データがありません');
-        return;
-    }
-    
-    let csv = 'サンプル名,属性,時間(秒),強度\n';
-    
-    for (let i = 0; i < timeData.length; i++) {
-        csv += `${currentSample},${currentAttribute},${timeData[i].toFixed(1)},${intensityData[i].toFixed(1)}\n`;
-    }
-    
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    
-    link.setAttribute('href', url);
-    link.setAttribute('download', `TI_${currentSample}_${currentAttribute}_${new Date().getTime()}.csv`);
-    link.style.visibility = 'hidden';
-    
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-});
-
-// 画像出力
-exportImageBtn.addEventListener('click', () => {
-    if (timeData.length === 0) {
-        alert('データがありません');
-        return;
-    }
-    
-    const link = document.createElement('a');
-    link.download = `TI_${currentSample}_${currentAttribute}_${new Date().getTime()}.png`;
-    link.href = chart.toBase64Image();
-    link.click();
-});
-
 // 初期化
 window.addEventListener('load', () => {
+    initDrawCanvas();
     initChart();
+    setupEventListeners();
 });
+
+// 描画キャンバスの初期化
+function initDrawCanvas() {
+    drawCanvas = document.getElementById('drawCanvas');
+    drawCtx = drawCanvas.getContext('2d');
+    
+    resizeCanvas();
+    window.addEventListener('resize', resizeCanvas);
+    
+    // マウスイベント
+    drawCanvas.addEventListener('mousedown', startDrawing);
+    drawCanvas.addEventListener('mousemove', draw);
+    drawCanvas.addEventListener('mouseup', stopDrawing);
+    drawCanvas.addEventListener('mouseleave', stopDrawing);
+    
+    // タッチイベント
+    drawCanvas.addEventListener('touchstart', handleTouch);
+    drawCanvas.addEventListener('touchmove', handleTouch);
+    drawCanvas.addEventListener('touchend', stopDrawing);
+}
+
+function resizeCanvas() {
+    const rect = drawCanvas.getBoundingClientRect();
+    drawCanvas.width = rect.width;
+    drawCanvas.height = rect.height;
+    redrawCanvas();
+}
+
+function redrawCanvas() {
+    drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    
+    // グリッド描画
+    drawCtx.strokeStyle = '#e0e0e0';
+    drawCtx.lineWidth = 1;
+    
+    // 横線
+    for (let i = 0; i <= 10; i++) {
+        const y = (drawCanvas.height / 10) * i;
+        drawCtx.beginPath();
+        drawCtx.moveTo(0, y);
+        drawCtx.lineTo(drawCanvas.width, y);
+        drawCtx.stroke();
+    }
+    
+    // 縦線
+    for (let i = 0; i <= 10; i++) {
+        const x = (drawCanvas.width / 10) * i;
+        drawCtx.beginPath();
+        drawCtx.moveTo(x, 0);
+        drawCtx.lineTo(x, drawCanvas.height);
+        drawCtx.stroke();
+    }
+    
+    // 描画した線を再描画
+    if (rawPoints.length > 0) {
+        drawCtx.strokeStyle = '#667eea';
+        drawCtx.lineWidth = 3;
+        drawCtx.lineCap = 'round';
+        drawCtx.lineJoin = 'round';
+        drawCtx.beginPath();
+        drawCtx.moveTo(rawPoints[0].x, rawPoints[0].y);
+        for (let i = 1; i < rawPoints.length; i++) {
+            drawCtx.lineTo(rawPoints[i].x, rawPoints[i].y);
+        }
+        drawCtx.stroke();
+    }
+}
+
+function startDrawing(e) {
+    isDrawing = true;
+    rawPoints = [];
+    const pos = getMousePos(e);
+    rawPoints.push(pos);
+}
+
+function draw(e) {
+    if (!isDrawing) return;
+    
+    const pos = getMousePos(e);
+    rawPoints.push(pos);
+    
+    drawCtx.strokeStyle = '#667eea';
+    drawCtx.lineWidth = 3;
+    drawCtx.lineCap = 'round';
+    drawCtx.lineJoin = 'round';
+    
+    if (rawPoints.length > 1) {
+        const prev = rawPoints[rawPoints.length - 2];
+        drawCtx.beginPath();
+        drawCtx.moveTo(prev.x, prev.y);
+        drawCtx.lineTo(pos.x, pos.y);
+        drawCtx.stroke();
+    }
+}
+
+function stopDrawing() {
+    if (!isDrawing) return;
+    isDrawing = false;
+    
+    if (rawPoints.length > 2) {
+        processDrawing();
+    }
+}
+
+function handleTouch(e) {
+    e.preventDefault();
+    const touch = e.touches[0];
+    const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 'mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+    });
+    drawCanvas.dispatchEvent(mouseEvent);
+}
+
+function getMousePos(e) {
+    const rect = drawCanvas.getBoundingClientRect();
+    return {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top
+    };
+}
+
+// 描画データの処理と補間
+function processDrawing() {
+    // キャンバス座標を実際の値に変換
+    const convertedPoints = raw
