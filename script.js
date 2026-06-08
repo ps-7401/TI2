@@ -46,8 +46,8 @@ function resizeCanvas() {
 function redrawCanvas() {
     drawCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
     
-    // グリッド描画
-    drawCtx.strokeStyle = '#e0e0e0';
+    // グリッド描画（薄いグレー）
+    drawCtx.strokeStyle = '#f0f0f0';
     drawCtx.lineWidth = 1;
     
     // 横線
@@ -68,10 +68,24 @@ function redrawCanvas() {
         drawCtx.stroke();
     }
     
+    // 軸線（濃いめ）
+    drawCtx.strokeStyle = '#d0d0d0';
+    drawCtx.lineWidth = 2;
+    // X軸
+    drawCtx.beginPath();
+    drawCtx.moveTo(0, drawCanvas.height);
+    drawCtx.lineTo(drawCanvas.width, drawCanvas.height);
+    drawCtx.stroke();
+    // Y軸
+    drawCtx.beginPath();
+    drawCtx.moveTo(0, 0);
+    drawCtx.lineTo(0, drawCanvas.height);
+    drawCtx.stroke();
+    
     // 描画した線を再描画
     if (rawPoints.length > 0) {
-        drawCtx.strokeStyle = '#667eea';
-        drawCtx.lineWidth = 3;
+        drawCtx.strokeStyle = '#4a90e2';
+        drawCtx.lineWidth = 2.5;
         drawCtx.lineCap = 'round';
         drawCtx.lineJoin = 'round';
         drawCtx.beginPath();
@@ -80,6 +94,14 @@ function redrawCanvas() {
             drawCtx.lineTo(rawPoints[i].x, rawPoints[i].y);
         }
         drawCtx.stroke();
+        
+        // ポイントを描画
+        drawCtx.fillStyle = '#4a90e2';
+        for (let i = 0; i < rawPoints.length; i += 5) {
+            drawCtx.beginPath();
+            drawCtx.arc(rawPoints[i].x, rawPoints[i].y, 2, 0, Math.PI * 2);
+            drawCtx.fill();
+        }
     }
 }
 
@@ -93,21 +115,36 @@ function startDrawing(e) {
 function draw(e) {
     if (!isDrawing) return;
     
+    e.preventDefault();
     const pos = getMousePos(e);
-    rawPoints.push(pos);
     
-    drawCtx.strokeStyle = '#667eea';
-    drawCtx.lineWidth = 3;
-    drawCtx.lineCap = 'round';
-    drawCtx.lineJoin = 'round';
-    
-    if (rawPoints.length > 1) {
-        const prev = rawPoints[rawPoints.length - 2];
-        drawCtx.beginPath();
-        drawCtx.moveTo(prev.x, prev.y);
-        drawCtx.lineTo(pos.x, pos.y);
-        drawCtx.stroke();
+    // 前の点との距離を計算
+    if (rawPoints.length > 0) {
+        const lastPoint = rawPoints[rawPoints.length - 1];
+        const distance = Math.sqrt(
+            Math.pow(pos.x - lastPoint.x, 2) + 
+            Math.pow(pos.y - lastPoint.y, 2)
+        );
+        
+        // 距離が大きい場合は中間点を補間
+        if (distance > 5) {
+            const steps = Math.ceil(distance / 5);
+            for (let i = 1; i <= steps; i++) {
+                const t = i / steps;
+                const interpolatedPoint = {
+                    x: lastPoint.x + (pos.x - lastPoint.x) * t,
+                    y: lastPoint.y + (pos.y - lastPoint.y) * t
+                };
+                rawPoints.push(interpolatedPoint);
+            }
+        } else {
+            rawPoints.push(pos);
+        }
+    } else {
+        rawPoints.push(pos);
     }
+    
+    redrawCanvas();
 }
 
 function stopDrawing() {
@@ -140,7 +177,7 @@ function getMousePos(e) {
 // 描画データの処理と補間
 function processDrawing() {
     // キャンバス座標を実際の値に変換
-    const convertedPoints = rawPoints.map(p => ({
+    let convertedPoints = rawPoints.map(p => ({
         time: (p.x / drawCanvas.width) * maxTime,
         intensity: maxIntensity - (p.y / drawCanvas.height) * maxIntensity
     }));
@@ -148,41 +185,104 @@ function processDrawing() {
     // X軸でソート
     convertedPoints.sort((a, b) => a.time - b.time);
     
-    // スプライン補間で滑らかに
-    smoothedData = interpolateSpline(convertedPoints, 100);
+    // 重複するX座標を平均化
+    const uniquePoints = [];
+    let currentTime = -1;
+    let sumIntensity = 0;
+    let count = 0;
+    
+    for (let i = 0; i < convertedPoints.length; i++) {
+        const roundedTime = Math.round(convertedPoints[i].time * 10) / 10;
+        
+        if (roundedTime !== currentTime) {
+            if (count > 0) {
+                uniquePoints.push({
+                    time: currentTime,
+                    intensity: sumIntensity / count
+                });
+            }
+            currentTime = roundedTime;
+            sumIntensity = convertedPoints[i].intensity;
+            count = 1;
+        } else {
+            sumIntensity += convertedPoints[i].intensity;
+            count++;
+        }
+    }
+    
+    if (count > 0) {
+        uniquePoints.push({
+            time: currentTime,
+            intensity: sumIntensity / count
+        });
+    }
+    
+    // より滑らかな補間（キュービックスプライン風）
+    smoothedData = smoothInterpolation(uniquePoints, 200);
     
     updateChart();
     updateDataTable();
 }
 
-// スプライン補間（簡易版）
-function interpolateSpline(points, numPoints) {
+// 滑らかな補間処理
+function smoothInterpolation(points, numPoints) {
     if (points.length < 2) return points;
     
     const result = [];
-    const step = maxTime / numPoints;
+    const minTime = points[0].time;
+    const maxTime = points[points.length - 1].time;
+    const step = (maxTime - minTime) / numPoints;
     
-    for (let t = 0; t <= maxTime; t += step) {
-        const intensity = interpolateValue(points, t);
-        result.push({ time: parseFloat(t.toFixed(2)), intensity: parseFloat(intensity.toFixed(2)) });
+    for (let t = minTime; t <= maxTime; t += step) {
+        let intensity;
+        
+        // カトマル・ロム・スプライン補間
+        intensity = catmullRomInterpolate(points, t);
+        
+        // 範囲内に制限
+        intensity = Math.max(0, Math.min(maxIntensity, intensity));
+        
+        result.push({ 
+            time: parseFloat(t.toFixed(2)), 
+            intensity: parseFloat(intensity.toFixed(2)) 
+        });
     }
     
     return result;
 }
 
-function interpolateValue(points, targetTime) {
+// カトマル・ロム補間
+function catmullRomInterpolate(points, targetTime) {
     if (targetTime <= points[0].time) return points[0].intensity;
     if (targetTime >= points[points.length - 1].time) return points[points.length - 1].intensity;
     
-    // 線形補間
-    for (let i = 0; i < points.length - 1; i++) {
+    // targetTimeを含む区間を見つける
+    let i = 0;
+    for (i = 0; i < points.length - 1; i++) {
         if (targetTime >= points[i].time && targetTime <= points[i + 1].time) {
-            const t = (targetTime - points[i].time) / (points[i + 1].time - points[i].time);
-            return points[i].intensity + t * (points[i + 1].intensity - points[i].intensity);
+            break;
         }
     }
     
-    return 0;
+    // 4点を取得（catmull-romには前後2点ずつ必要）
+    const p0 = i > 0 ? points[i - 1] : points[i];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = i < points.length - 2 ? points[i + 2] : points[i + 1];
+    
+    // 正規化されたt（0-1）
+    const t = (targetTime - p1.time) / (p2.time - p1.time);
+    const t2 = t * t;
+    const t3 = t2 * t;
+    
+    // カトマル・ロム公式
+    const v0 = (p2.intensity - p0.intensity) * 0.5;
+    const v1 = (p3.intensity - p1.intensity) * 0.5;
+    
+    return (2 * p1.intensity - 2 * p2.intensity + v0 + v1) * t3 +
+           (-3 * p1.intensity + 3 * p2.intensity - 2 * v0 - v1) * t2 +
+           v0 * t +
+           p1.intensity;
 }
 
 // Chart.jsの初期化
@@ -195,12 +295,14 @@ function initChart() {
             datasets: [{
                 label: '強度',
                 data: [],
-                borderColor: '#667eea',
-                backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                borderWidth: 3,
+                borderColor: '#4a90e2',
+                backgroundColor: 'rgba(74, 144, 226, 0.08)',
+                borderWidth: 2.5,
                 tension: 0.4,
                 fill: true,
-                pointRadius: 0
+                pointRadius: 0,
+                pointHoverRadius: 4,
+                pointHoverBackgroundColor: '#4a90e2'
             }]
         },
         options: {
@@ -209,12 +311,20 @@ function initChart() {
             plugins: {
                 title: {
                     display: true,
-                    text: 'Time-Intensity曲線（補間後）',
-                    font: { size: 18, weight: 'bold' }
+                    text: 'Time-Intensity曲線',
+                    font: { size: 16, weight: '600' },
+                    color: '#2d3748',
+                    padding: { bottom: 20 }
                 },
                 legend: {
                     display: true,
-                    position: 'top'
+                    position: 'top',
+                    labels: {
+                        font: { size: 13 },
+                        color: '#4a5568',
+                        usePointStyle: true,
+                        padding: 15
+                    }
                 }
             },
             scales: {
@@ -222,17 +332,35 @@ function initChart() {
                     title: {
                         display: true,
                         text: '時間 (秒)',
-                        font: { size: 14, weight: 'bold' }
+                        font: { size: 13, weight: '500' },
+                        color: '#4a5568'
+                    },
+                    grid: {
+                        color: '#f0f0f0',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#718096',
+                        font: { size: 12 }
                     }
                 },
                 y: {
                     title: {
                         display: true,
                         text: '強度',
-                        font: { size: 14, weight: 'bold' }
+                        font: { size: 13, weight: '500' },
+                        color: '#4a5568'
                     },
                     min: 0,
-                    max: maxIntensity
+                    max: maxIntensity,
+                    grid: {
+                        color: '#f0f0f0',
+                        drawBorder: false
+                    },
+                    ticks: {
+                        color: '#718096',
+                        font: { size: 12 }
+                    }
                 }
             }
         }
