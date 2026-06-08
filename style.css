@@ -29,9 +29,9 @@ h1 {
 
 .control-panel {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 15px;
-    margin-bottom: 30px;
+    margin-bottom: 20px;
 }
 
 .input-group {
@@ -58,6 +58,13 @@ h1 {
     border-color: #667eea;
 }
 
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+    flex-wrap: wrap;
+}
+
 .btn {
     padding: 12px 24px;
     border: none;
@@ -66,6 +73,8 @@ h1 {
     font-weight: bold;
     cursor: pointer;
     transition: all 0.3s;
+    flex: 1;
+    min-width: 150px;
 }
 
 .btn-primary {
@@ -73,7 +82,7 @@ h1 {
     color: white;
 }
 
-.btn-primary:hover:not(:disabled) {
+.btn-primary:hover {
     background: #5568d3;
     transform: translateY(-2px);
 }
@@ -83,7 +92,7 @@ h1 {
     color: white;
 }
 
-.btn-secondary:hover:not(:disabled) {
+.btn-secondary:hover {
     background: #e67e22;
     transform: translateY(-2px);
 }
@@ -101,7 +110,6 @@ h1 {
 .btn-success {
     background: #27ae60;
     color: white;
-    margin-right: 10px;
 }
 
 .btn-success:hover {
@@ -109,9 +117,29 @@ h1 {
     transform: translateY(-2px);
 }
 
-.btn:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
+.canvas-container {
+    background: #f8f9fa;
+    padding: 20px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    border: 3px dashed #667eea;
+}
+
+.canvas-container::before {
+    content: '✏️ マウスやタッチでフリーハンド描画してください';
+    display: block;
+    text-align: center;
+    color: #667eea;
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+#drawCanvas {
+    width: 100%;
+    height: 300px;
+    cursor: crosshair;
+    background: white;
+    border-radius: 8px;
 }
 
 .chart-container {
@@ -120,33 +148,6 @@ h1 {
     border-radius: 12px;
     margin-bottom: 30px;
     height: 400px;
-}
-
-.intensity-control {
-    display: flex;
-    align-items: center;
-    gap: 15px;
-    margin-bottom: 30px;
-    padding: 20px;
-    background: #f8f9fa;
-    border-radius: 12px;
-}
-
-.intensity-control label {
-    font-weight: bold;
-    color: #555;
-}
-
-#intensitySlider {
-    flex: 1;
-    height: 8px;
-}
-
-#intensityValue {
-    font-size: 1.5em;
-    font-weight: bold;
-    color: #667eea;
-    min-width: 50px;
 }
 
 .export-section {
@@ -196,6 +197,14 @@ table tr:hover {
 @media (max-width: 768px) {
     .control-panel {
         grid-template-columns: 1fr;
+    }
+    
+    .action-buttons {
+        flex-direction: column;
+    }
+    
+    .btn {
+        width: 100%;
     }
     
     .container {
