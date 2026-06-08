@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time-Intensity評価アプリ</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>🍽️ Time-Intensity評価アプリ</h1>
+        
+        <div class="control-panel">
+            <div class="input-group">
+                <label for="sampleName">サンプル名:</label>
+                <input type="text" id="sampleName" placeholder="例: サンプルA">
+            </div>
+            
+            <div class="input-group">
+                <label for="attribute">評価属性:</label>
+                <input type="text" id="attribute" placeholder="例: 甘味、苦味、酸味など">
+            </div>
+            
+            <button id="startBtn" class="btn btn-primary">📊 評価開始</button>
+            <button id="stopBtn" class="btn btn-secondary" disabled>⏸️ 評価終了</button>
+            <button id="resetBtn" class="btn btn-danger">🔄 リセット</button>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="chart"></canvas>
+        </div>
+
+        <div class="intensity-control">
+            <label for="intensitySlider">強度 (0-10):</label>
+            <input type="range" id="intensitySlider" min="0" max="10" value="0" step="0.1" disabled>
+            <span id="intensityValue">0.0</span>
+        </div>
+
+        <div class="export-section">
+            <button id="exportCsvBtn" class="btn btn-success">📥 CSV出力</button>
+            <button id="exportImageBtn" class="btn btn-success">🖼️ 画像出力</button>
+        </div>
+
+        <div class="data-list">
+            <h3>📋 記録データ</h3>
+            <div id="dataTable"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
